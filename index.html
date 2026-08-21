@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador Clínico I.M. 3D - Hospital Virtual</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+        .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    </style>
+</head>
+<body class="text-slate-100 select-none">
+
+    <!-- Canvas Three.js -->
+    <div id="canvas-container"></div>
+
+    <!-- Capa de Interfaz de Usuario UI -->
+    <div class="ui-layer flex flex-col justify-between p-6">
+        
+        <!-- Header / Barra de Estado -->
+        <header class="flex justify-between items-center glass rounded-xl p-4 shadow-2xl interactive">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-blue-600 rounded-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">Simulador de Enfermería 3D</h1>
+                    <p class="text-xs text-slate-400">Administración de Medicamentos I.M.</p>
+                </div>
+            </div>
+            <div id="phase-badge" class="px-4 py-1.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+                Fase 1: Hospital Virtual
+            </div>
+        </header>
+
+        <!-- Pantallas Modales Interactivas -->
+        <main id="modal-container" class="flex-1 flex items-center justify-center py-6">
+            
+            <!-- Modal 1: Bienvenida -->
+            <div id="modal-welcome" class="glass p-8 rounded-2xl max-w-lg w-full text-center interactive shadow-2xl space-y-6">
+                <div class="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-full flex items-center justify-center mx-auto border border-blue-500/30">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h2 class="text-2xl font-bold">Bienvenido al Hospital Virtual</h2>
+                <p class="text-sm text-slate-300 leading-relaxed">
+                    Evaluación clínica de administración intramuscular. Acércate a la tablet médica en la estación de enfermería para iniciar la consulta del paciente.
+                </p>
+                <button onclick="nextStep(2)" class="w-full py-3 bg-blue-600 hover:bg-blue-500 font-semibold rounded-xl transition shadow-lg shadow-blue-600/30">
+                    Acceder a la Tablet Médica
+                </button>
+            </div>
+
+            <!-- Modal 2: Selección de Procedimiento -->
+            <div id="modal-selection" class="glass p-8 rounded-2xl max-w-2xl w-full interactive shadow-2xl space-y-6 hidden">
+                <h2 class="text-xl font-bold text-center">Selección de Procedimiento Médico</h2>
+                <p class="text-xs text-slate-400 text-center">Selecciona la intervención correcta solicitada para el turno:</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="selectProcedure('A')" class="p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:border-red-500 text-left transition">
+                        <span class="text-xs font-bold text-slate-400 block mb-1">Opción A</span>
+                        <span class="text-sm font-semibold text-slate-200">Vacuna I.M. Deltoides (Pediátrico)</span>
+                    </button>
+                    <button onclick="selectProcedure('B')" class="p-4 rounded-xl border border-blue-500 bg-blue-600/10 hover:bg-blue-600/20 text-left transition relative">
+                        <span class="absolute top-2 right-2 flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span></span>
+                        <span class="text-xs font-bold text-blue-400 block mb-1">Opción B (Requerido)</span>
+                        <span class="text-sm font-semibold text-slate-100">Analgésico I.M. Dorso-glúteo (Adulto)</span>
+                    </button>
+                    <button onclick="selectProcedure('C')" class="p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:border-red-500 text-left transition">
+                        <span class="text-xs font-bold text-slate-400 block mb-1">Opción C</span>
+                        <span class="text-sm font-semibold text-slate-200">Antibiótico I.M. Vasto Lateral (Lactante)</span>
+                    </button>
+                    <button onclick="selectProcedure('D')" class="p-4 rounded-xl border border-slate-700 bg-slate-800/50 hover:border-red-500 text-left transition">
+                        <span class="text-xs font-bold text-slate-400 block mb-1">Opción D</span>
+                        <span class="text-sm font-semibold text-slate-200">Infusión Intravenosa Continua (V.I.)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal 3: Caso Clínico -->
+            <div id="modal-clinical-case" class="glass p-8 rounded-2xl max-w-xl w-full interactive shadow-2xl space-y-6 hidden">
+                <div class="border-b border-slate-700 pb-4 flex justify-between items-center">
+                    <div>
+                        <h2 class="text-xl font-bold">Historia Clínica N° 4092</h2>
+                        <p class="text-xs text-slate-400">Paciente: Don Alberto Gómez (45 años)</p>
+                    </div>
+                    <span class="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-bold">Dolor Agudo 8/10</span>
+                </div>
+                <div class="space-y-3 text-sm text-slate-300">
+                    <p><strong class="text-slate-100">Prescripción Médica:</strong> Diclofenaco Sódico 75 mg / 3 ml, vía Intramuscular profunda, dosis única inmediata.</p>
+                    <p><strong class="text-slate-100">Diagnóstico:</strong> Lumbalgia aguda secundaria a esfuerzo físico.</p>
+                    <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs">
+                        ⚠️ <strong>Alertas Clínicas:</strong> Sin alergias conocidas a AINEs. Antecedente de hipertensión leve. Verifique fecha de vencimiento e insumos.
+                    </div>
+                </div>
+                <button onclick="nextStep(4)" class="w-full py-3 bg-blue-600 hover:bg-blue-500 font-semibold rounded-xl transition shadow-lg shadow-blue-600/30">
+                    Aceptar Caso y Definir Plan
+                </button>
+            </div>
+
+            <!-- Modal 4: Criba de Decisiones (6 de 10 pasos) -->
+            <div id="modal-decision-screen" class="glass p-8 rounded-2xl max-w-2xl w-full interactive shadow-2xl space-y-6 hidden">
+                <div>
+                    <h2 class="text-xl font-bold">Criba de Pasos Críticos</h2>
+                    <p class="text-xs text-slate-400">Selecciona únicamente los 6 pasos correctos para el procedimiento I.M.</p>
+                </div>
+                <div id="steps-selector-grid" class="grid grid-cols-2 gap-2 text-xs"></div>
+                <button onclick="validateStepSelection()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 font-semibold rounded-xl transition shadow-lg shadow-blue-600/30">
+                    Confirmar Selección (<span id="selected-count">0</span>/6)
+                </button>
+            </div>
+
+            <!-- Modal 5: Organización Secuencial (Drag and Drop / Orden) -->
+            <div id="modal-sequence-screen" class="glass p-8 rounded-2xl max-w-xl w-full interactive shadow-2xl space-y-6 hidden">
+                <div>
+                    <h2 class="text-xl font-bold">Orden Secuencial del Procedimiento</h2>
+                    <p class="text-xs text-slate-400">Organiza las acciones seleccionadas en el orden clínico correcto (1 a 6):</p>
+                </div>
+                <div id="sequence-list" class="space-y-2"></div>
+                <button onclick="validateSequenceOrder()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 font-semibold rounded-xl transition shadow-lg shadow-blue-600/30">
+                    Ir a la Mesa de Preparación 3D
+                </button>
+            </div>
+
+            <!-- Modal 6: Selección de Insumos (Mesa de Preparación) -->
+            <div id="modal-supplies-screen" class="glass p-8 rounded-2xl max-w-2xl w-full interactive shadow-2xl space-y-6 hidden">
+                <div>
+                    <h2 class="text-xl font-bold">Mesa de Preparación de Insumos</h2>
+                    <p class="text-xs text-slate-400">Selecciona los insumos estériles e idóneos para la bandeja de procedimiento:</p>
+                </div>
+                <div id="supplies-grid" class="grid grid-cols-2 gap-3 text-xs"></div>
+                <button onclick="validateSupplies()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 font-semibold rounded-xl transition shadow-lg shadow-blue-600/30">
+                    Llevar Bandeja al Paciente 3D
+                </button>
+            </div>
+
+            <!-- Modal 7: Ejecución - Minijuegos 3D / Canvas -->
+            <div id="modal-execution-screen" class="glass p-6 rounded-2xl max-w-lg w-full interactive shadow-2xl space-y-4 hidden">
+                <div id="exec-step-header" class="border-b border-slate-700 pb-2">
+                    <span id="exec-step-num" class="text-xs text-blue-400 font-bold uppercase">Paso 1 de 5</span>
+                    <h3 id="exec-step-title" class="text-lg font-bold">Higiene de Manos</h3>
+                </div>
+
+                <!-- Sub-pantalla 1: Higiene Manos -->
+                <div id="exec-sub-1" class="space-y-4">
+                    <p class="text-xs text-slate-300">Realiza la desinfección clínica antes de tocar al paciente.</p>
+                    <button onclick="completeSubStep(1)" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 font-semibold rounded-xl text-sm transition">
+                        Ejecutar Lavado Clínico de Manos
+                    </button>
+                </div>
+
+                <!-- Sub-pantalla 2: Posicionamiento e Identificación -->
+                <div id="exec-sub-2" class="space-y-4 hidden">
+                    <p class="text-xs text-slate-300">Confirma la identidad con la manilla e indica la posición decúbito prono.</p>
+                    <button onclick="completeSubStep(2)" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 font-semibold rounded-xl text-sm transition">
+                        Verificar Manilla y Posicionar Paciente
+                    </button>
+                </div>
+
+                <!-- Sub-pantalla 3: Minijuego de Asepsia -->
+                <div id="exec-sub-3" class="space-y-3 hidden">
+                    <p class="text-xs text-slate-300">Mantén presionado el clic y dibuja espirales de adentro hacia afuera para desinfectar:</p>
+                    <div class="flex justify-center">
+                        <canvas id="asepsis-canvas" width="260" height="200" class="border border-slate-700 bg-slate-900 rounded-xl cursor-crosshair"></canvas>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-2">
+                        <div id="asepsis-progress" class="bg-emerald-500 h-2 rounded-full w-0 transition-all"></div>
+                    </div>
+                </div>
+
+                <!-- Sub-pantalla 4: Minijuego Ángulo Inyección -->
+                <div id="exec-sub-4" class="space-y-3 hidden">
+                    <p class="text-xs text-slate-300">Haz clic en "Inyectar" cuando el indicador alcance exactamente los **90°**:</p>
+                    <div class="flex justify-center">
+                        <canvas id="angle-canvas" width="260" height="150" class="border border-slate-700 bg-slate-900 rounded-xl"></canvas>
+                    </div>
+                    <button onclick="checkInjectionAngle()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 font-semibold rounded-xl text-sm transition">
+                        Inyectar a 90°
+                    </button>
+                </div>
+
+                <!-- Sub-pantalla 5: Decisiones Críticas Post-Punción -->
+                <div id="exec-sub-5" class="space-y-4 hidden">
+                    <div class="p-3 bg-amber-500/20 border border-amber-500/40 rounded-xl text-xs text-amber-200">
+                        💉 <strong>Aspiración Realizada:</strong> Se observa ausencia de retorno venoso. Procede con el desecho y registro.
+                    </div>
+                    <div class="space-y-2">
+                        <button onclick="finishSimulation(false)" class="w-full py-2.5 bg-slate-800 border border-slate-700 hover:bg-slate-700 rounded-xl text-xs transition">
+                            Deschar aguja directamente en el Guardián y registrar
+                        </button>
+                        <button onclick="finishSimulation(true)" class="w-full py-2.5 bg-red-900/40 border border-red-500/30 hover:bg-red-900/60 text-red-200 rounded-xl text-xs transition">
+                            Reencapuchar aguja usada antes de descartar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal 8 y 9: Evaluación y Rúbrica Final -->
+            <div id="modal-result-screen" class="glass p-8 rounded-2xl max-w-xl w-full interactive shadow-2xl space-y-6 hidden">
+                <div class="text-center space-y-2">
+                    <div id="result-icon" class="w-16 h-16 rounded-full flex items-center justify-center mx-auto border"></div>
+                    <h2 id="result-title" class="text-2xl font-bold"></h2>
+                    <p id="result-score" class="text-3xl font-extrabold text-blue-400"></p>
+                </div>
+                <div id="rubric-breakdown" class="space-y-2 text-xs border-t border-b border-slate-700/60 py-4 max-h-48 overflow-y-auto"></div>
+                <p id="result-feedback" class="text-xs text-slate-300 leading-relaxed bg-slate-900/50 p-4 rounded-xl border border-slate-800"></p>
+                <button onclick="resetGame()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 font-semibold rounded-xl transition shadow-lg shadow-blue-600/30">
+                    Reintentar Simulación
+                </button>
+            </div>
+
+        </main>
+
+        <!-- Footer / Navegación -->
+        <footer class="flex justify-between items-center text-xs text-slate-500 glass rounded-xl px-4 py-2 interactive">
+            <span>Universidad de Enfermería Virtual 3D</span>
+            <span>Protocolo de Bioseguridad I.M. v2.4</span>
+        </footer>
+    </div>
+
+    <!-- Script Principal de Lógica de Juego y 3D -->
+    <script>
+        // --- ESTADO DEL JUEGO Y TELEMETRÍA ---
+        let currentStep = 1;
+        let scoreData = {
+            safety: 1.0,
+            asepsis: 1.0,
+            anatomy: 1.0,
+            technique: 1.0,
+            waste: 1.0,
+            criticalFail: false,
+            failReason: ""
+        };
+
+        const allPossibleSteps = [
+            { id: 1, text: "Higiene de manos clínico", correct: true },
+            { id: 2, text: "Verificación de los 5 Correctos", correct: true },
+            { id: 3, text: "Preparación y envasado aséptico del medicamento", correct: true },
+            { id: 4, text: "Identificación del paciente y explicación del procedimiento", correct: true },
+            { id: 5, text: "Delimitación del cuadrante glúteo e inyección I.M.", correct: true },
+            { id: 6, text: "Desecho seguro en guardián de cortopunzantes y registro", correct: true },
+            { id: 7, text: "Reencapuchar la aguja usada antes de desecharla", correct: false },
+            { id: 8, text: "Realizar un masaje fuerte y circular post-inyección", correct: false },
+            { id: 9, text: "Limpiar la aguja estéril con alcohol pre-inyección", correct: false },
+            { id: 10, text: "Administrar I.M. en la vena basílica del brazo", correct: false }
+        ];
+
+        let selectedStepIds = [];
+        let orderedStepIds = [];
+
+        const suppliesList = [
+            { id: 'syring5', text: 'Jeringa de 5 ml', correct: true },
+            { id: 'needleG21', text: 'Aguja 21G x 1 1/2" (Verde)', correct: true },
+            { id: 'ampoule', text: 'Ampolla Diclofenaco 75mg/3ml (Vigente)', correct: true },
+            { id: 'cottonAlcohol', text: 'Torundas con Alcohol 70%', correct: true },
+            { id: 'gloves', text: 'Guantes de manejo limpios', correct: true },
+            { id: 'syringInsulin', text: 'Jeringa de Insulina 1 ml', correct: false },
+            { id: 'expiredAmpoule', text: 'Ampolla de Diclofenaco (Vencida)', correct: false },
+            { id: 'needlePediatric', text: 'Aguja Pediátrica 25G x 5/8"', correct: false }
+        ];
+
+        let selectedSupplyIds = [];
+
+        // --- TESCENA THREE.JS ---
+        let scene, camera, renderer, controls;
+        let roomGroup, patientMesh, bedMesh, tabletMesh;
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            
+            // Escena
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1d);
+            scene.fog = new THREE.FogExp2(0x0a0f1d, 0.03);
+
+            // Cámara
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2.5, 5);
+
+            // Renderizador
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Controles de Órbita
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.1;
+
+            // Iluminación Clínica
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 7);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            const spotLight = new THREE.SpotLight(0x38bdf8, 1.2);
+            spotLight.position.set(0, 5, 0);
+            scene.add(spotLight);
+
+            // Construcción del Entorno
+            buildHospitalRoom();
+
+            // Eventos
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function buildHospitalRoom() {
+            roomGroup = new THREE.Group();
+
+            // Piso Quirúrgico
+            const floorGeo = new THREE.PlaneGeometry(12, 12);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.2, metalness: 0.1 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            roomGroup.add(floor);
+
+            // Paredes
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+            const backWall = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), wallMat);
+            backWall.position.set(0, 3, -6);
+            roomGroup.add(backWall);
+
+            // Camilla Médica
+            const bedGroup = new THREE.Group();
+            const bedBase = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.8, 1.2), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+            bedBase.position.y = 0.4;
+            const mattress = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.2, 1.1), new THREE.MeshStandardMaterial({ color: 0x0284c7 }));
+            mattress.position.y = 0.9;
+            bedGroup.add(bedBase, mattress);
+            bedGroup.position.set(-1.5, 0, -2);
+            roomGroup.add(bedGroup);
+
+            // Paciente 3D (Modelo Esquemático Anatomico)
+            const patientGroup = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.2), new THREE.MeshStandardMaterial({ color: 0xfbd5c0 }));
+            body.rotation.z = Math.PI / 2;
+            body.position.y = 1.15;
+            
+            // Zona Glútea Resaltada
+            const gluteGeo = new THREE.SphereGeometry(0.2, 16, 16);
+            const gluteMat = new THREE.MeshStandardMaterial({ color: 0xef4444, wireframe: true });
+            const gluteTarget = new THREE.Mesh(gluteGeo, gluteMat);
+            gluteTarget.position.set(-0.3, 1.2, 0.1);
+
+            patientGroup.add(body, gluteTarget);
+            patientGroup.position.set(-1.5, 0, -2);
+            roomGroup.add(patientGroup);
+
+            // Estación de Enfermería y Tablet
+            const desk = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 0.8), new THREE.MeshStandardMaterial({ color: 0x475569 }));
+            desk.position.set(2, 0.45, -1);
+            
+            const tabletGeo = new THREE.BoxGeometry(0.4, 0.02, 0.3);
+            const tabletMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.5 });
+            tabletMesh = new THREE.Mesh(tabletGeo, tabletMat);
+            tabletMesh.position.set(2, 0.92, -1);
+
+            roomGroup.add(desk, tabletMesh);
+            scene.add(roomGroup);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if(tabletMesh) tabletMesh.rotation.y += 0.005;
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- FLUJO Y NAVEGACIÓN DE ETAPAS ---
+        function updatePhaseBadge(text) {
+            document.getElementById('phase-badge').innerText = text;
+        }
+
+        function hideAllModals() {
+            const modals = ['modal-welcome', 'modal-selection', 'modal-clinical-case', 'modal-decision-screen', 'modal-sequence-screen', 'modal-supplies-screen', 'modal-execution-screen', 'modal-result-screen'];
+            modals.forEach(id => document.getElementById(id).classList.add('hidden'));
+        }
+
+        function nextStep(step) {
+            currentStep = step;
+            hideAllModals();
+
+            if(step === 2) {
+                updatePhaseBadge("Fase 2: Selección de Procedimiento");
+                document.getElementById('modal-selection').classList.remove('hidden');
+                // Camara enfocando la estación
+                gsapCameraPosition(1.5, 2, 1);
+            } else if(step === 3) {
+                updatePhaseBadge("Fase 3: Caso Clínico");
+                document.getElementById('modal-clinical-case').classList.remove('hidden');
+            } else if(step === 4) {
+                updatePhaseBadge("Fase 4: Criba de Decisiones");
+                renderStepSelector();
+                document.getElementById('modal-decision-screen').classList.remove('hidden');
+            } else if(step === 5) {
+                updatePhaseBadge("Fase 5: Orden Secuencial");
+                renderSequenceOrganizer();
+                document.getElementById('modal-sequence-screen').classList.remove('hidden');
+            } else if(step === 6) {
+                updatePhaseBadge("Fase 6: Selección de Insumos");
+                renderSuppliesSelector();
+                document.getElementById('modal-supplies-screen').classList.remove('hidden');
+            } else if(step === 7) {
+                updatePhaseBadge("Fase 7: Ejecución Práctica 3D");
+                document.getElementById('modal-execution-screen').classList.remove('hidden');
+                gsapCameraPosition(-1.5, 2.5, 0.5); // Enfocar paciente
+                initExecutionSubstep(1);
+            }
+        }
+
+        function gsapCameraPosition(x, y, z) {
+            // Animación suave de cámara básica
+            camera.position.set(x, y, z);
+            controls.target.set(x > 0 ? 2 : -1.5, 1, -1.5);
+        }
+
+        // --- ETAPA 2: SELECCIÓN ---
+        function selectProcedure(option) {
+            if(option !== 'B') {
+                scoreData.safety -= 0.5;
+                alert("⚠️ Procedimiento incorrecto seleccionado para la orden médica del turno.");
+            }
+            nextStep(3);
+        }
+
+        // --- ETAPA 4: CRIBA DE PASOS ---
+        function renderStepSelector() {
+            const container = document.getElementById('steps-selector-grid');
+            container.innerHTML = '';
+            
+            // Mezclar opciones
+            const shuffled = [...allPossibleSteps].sort(() => 0.5 - Math.random());
+
+            shuffled.forEach(step => {
+                const btn = document.createElement('button');
+                btn.className = "p-3 rounded-xl border border-slate-700 bg-slate-800/60 hover:bg-slate-700 text-left transition flex items-center justify-between";
+                btn.innerHTML = `<span>${step.text}</span> <input type="checkbox" id="chk-${step.id}" class="pointer-events-none">`;
+                btn.onclick = () => toggleStepSelection(step.id, btn);
+                container.appendChild(btn);
+            });
+        }
+
+        function toggleStepSelection(id, btnElement) {
+            const index = selectedStepIds.indexOf(id);
+            if (index > -1) {
+                selectedStepIds.splice(index, 1);
+                btnElement.classList.remove('border-blue-500', 'bg-blue-600/20');
+                btnElement.querySelector('input').checked = false;
+            } else {
+                if(selectedStepIds.length >= 6) {
+                    alert("Solo puedes seleccionar máximo 6 pasos críticos.");
+                    return;
+                }
+                selectedStepIds.push(id);
+                btnElement.classList.add('border-blue-500', 'bg-blue-600/20');
+                btnElement.querySelector('input').checked = true;
+            }
+            document.getElementById('selected-count').innerText = selectedStepIds.length;
+        }
+
+        function validateStepSelection() {
+            if(selectedStepIds.length !== 6) {
+                alert("Debes seleccionar exactamente 6 pasos.");
+                return;
+            }
+
+            // Evaluar errores
+            selectedStepIds.forEach(id => {
+                const item = allPossibleSteps.find(s => s.id === id);
+                if(!item.correct) {
+                    scoreData.technique -= 0.3;
+                    if(id === 7) {
+                        scoreData.criticalFail = true;
+                        scoreData.failReason = "Has incluido la peligrosa acción de reencapuchar la aguja usada.";
+                    }
+                }
+            });
+
+            orderedStepIds = [...selectedStepIds];
+            nextStep(5);
+        }
+
+        // --- ETAPA 5: ORDEN SECUENCIAL ---
+        function renderSequenceOrganizer() {
+            const container = document.getElementById('sequence-list');
+            container.innerHTML = '';
+
+            orderedStepIds.forEach((id, idx) => {
+                const stepObj = allPossibleSteps.find(s => s.id === id);
+                const item = document.createElement('div');
+                item.className = "p-3 rounded-xl border border-slate-700 bg-slate-800/80 flex justify-between items-center text-xs";
+                item.innerHTML = `
+                    <span class="font-bold text-blue-400 mr-2">Posición ${idx + 1}:</span>
+                    <span class="flex-1">${stepObj.text}</span>
+                    <div class="flex gap-1">
+                        <button onclick="moveSequence(${idx}, -1)" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded">▲</button>
+                        <button onclick="moveSequence(${idx}, 1)" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded">▼</button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function moveSequence(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= orderedStepIds.length) return;
+            const temp = orderedStepIds[index];
+            orderedStepIds[index] = orderedStepIds[newIndex];
+            orderedStepIds[newIndex] = temp;
+            renderSequenceOrganizer();
+        }
+
+        function validateSequenceOrder() {
+            // Verificar si el orden estándar de los correctos se mantiene
+            const correctOrder = [1, 2, 3, 4, 5, 6];
+            let mistakes = 0;
+            orderedStepIds.forEach((id, idx) => {
+                if(id !== correctOrder[idx]) mistakes++;
+            });
+
+            if(mistakes > 0) {
+                scoreData.technique -= 0.3;
+            }
+            nextStep(6);
+        }
+
+        // --- ETAPA 6: INSUMOS ---
+        function renderSuppliesSelector() {
+            const container = document.getElementById('supplies-grid');
+            container.innerHTML = '';
+
+            suppliesList.forEach(sup => {
+                const btn = document.createElement('button');
+                btn.className = "p-3 rounded-xl border border-slate-700 bg-slate-800/60 hover:bg-slate-700 text-left transition flex items-center justify-between";
+                btn.innerHTML = `<span>${sup.text}</span> <input type="checkbox" class="pointer-events-none">`;
+                btn.onclick = () => {
+                    const idx = selectedSupplyIds.indexOf(sup.id);
+                    if(idx > -1) {
+                        selectedSupplyIds.splice(idx, 1);
+                        btn.classList.remove('border-blue-500', 'bg-blue-600/20');
+                        btn.querySelector('input').checked = false;
+                    } else {
+                        selectedSupplyIds.push(sup.id);
+                        btn.classList.add('border-blue-500', 'bg-blue-600/20');
+                        btn.querySelector('input').checked = true;
+                    }
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function validateSupplies() {
+            const required = suppliesList.filter(s => s.correct).map(s => s.id);
+            let missing = required.filter(id => !selectedSupplyIds.includes(id));
+            let incorrectSelected = selectedSupplyIds.filter(id => !required.includes(id));
+
+            if(missing.length > 0 || incorrectSelected.length > 0) {
+                scoreData.technique -= 0.4;
+            }
+
+            if(selectedSupplyIds.includes('expiredAmpoule')) {
+                scoreData.safety -= 0.5;
+            }
+
+            nextStep(7);
+        }
+
+        // --- ETAPA 7: EJECUCIÓN PRACTICA & MINIJUEGOS ---
+        let currentSubStep = 1;
+
+        function initExecutionSubstep(sub) {
+            currentSubStep = sub;
+            document.getElementById('exec-step-num').innerText = `Paso ${sub} de 5`;
+            
+            // Ocultar sub-pantallas
+            for(let i=1; i<=5; i++) {
+                document.getElementById(`exec-sub-${i}`).classList.add('hidden');
+            }
+            document.getElementById(`exec-sub-${sub}`).classList.remove('hidden');
+
+            if(sub === 1) {
+                document.getElementById('exec-step-title').innerText = "Higiene de Manos Clínico";
+            } else if(sub === 2) {
+                document.getElementById('exec-step-title').innerText = "Identificación y Posicionamiento";
+            } else if(sub === 3) {
+                document.getElementById('exec-step-title').innerText = "Asepsia Espiral de la Piel";
+                initAsepsisMinigame();
+            } else if(sub === 4) {
+                document.getElementById('exec-step-title').innerText = "Ángulo de Inyección (90°)";
+                initAngleMinigame();
+            } else if(sub === 5) {
+                document.getElementById('exec-step-title').innerText = "Gestión de Residuos";
+            }
+        }
+
+        function completeSubStep(sub) {
+            initExecutionSubstep(sub + 1);
+        }
+
+        // Minijuego Asepsia
+        let asepsisProgress = 0;
+        function initAsepsisMinigame() {
+            const canvas = document.getElementById('asepsis-canvas');
+            const ctx = canvas.getContext('2d');
+            let isDrawing = false;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Dibujar zona de piel
+            ctx.fillStyle = '#fbd5c0';
+            ctx.beginPath();
+            ctx.arc(130, 100, 70, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Punto central
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(130, 100, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            canvas.onmousedown = () => isDrawing = true;
+            canvas.onmouseup = () => isDrawing = false;
+            canvas.onmousemove = (e) => {
+                if(!isDrawing) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+                ctx.beginPath();
+                ctx.arc(x, y, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                asepsisProgress += 2;
+                document.getElementById('asepsis-progress').style.width = Math.min(asepsisProgress, 100) + '%';
+
+                if(asepsisProgress >= 100) {
+                    canvas.onmousemove = null;
+                    setTimeout(() => completeSubStep(3), 500);
+                }
+            };
+        }
+
+        // Minijuego Ángulo
+        let angleAnimId;
+        let currentAngle = 45;
+        let angleDirection = 1;
+
+        function initAngleMinigame() {
+            const canvas = document.getElementById('angle-canvas');
+            const ctx = canvas.getContext('2d');
+
+            function drawAngle() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Superficie piel
+                ctx.strokeStyle = '#94a3b8';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(30, 120);
+                ctx.lineTo(230, 120);
+                ctx.stroke();
+
+                // Oscilación de ángulo
+                currentAngle += angleDirection * 1.5;
+                if(currentAngle > 135 || currentAngle < 45) angleDirection *= -1;
+
+                // Aguja / Vector
+                const rad = (currentAngle * Math.PI) / 180;
+                const endX = 130 + 60 * Math.cos(-rad);
+                const endY = 120 + 60 * Math.sin(-rad);
+
+                ctx.strokeStyle = Math.abs(currentAngle - 90) < 5 ? '#10b981' : '#38bdf8';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(130, 120);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+
+                // Lectura digital
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = '12px sans-serif';
+                ctx.fillText(`Ángulo Actual: ${Math.round(currentAngle)}°`, 80, 30);
+
+                angleAnimId = requestAnimationFrame(drawAngle);
+            }
+            drawAngle();
+        }
+
+        function checkInjectionAngle() {
+            cancelAnimationFrame(angleAnimId);
+            const diff = Math.abs(currentAngle - 90);
+            if(diff > 8) {
+                scoreData.anatomy -= 0.5;
+                alert(`⚠️ Ángulo impreciso (${Math.round(currentAngle)}°). La vía I.M. exige 90° estrictos.`);
+            }
+            completeSubStep(4);
+        }
+
+        // --- ETAPA 8 y 9: EVALUACIÓN Y RESULTADO ---
+        function finishSimulation(recapped) {
+            hideAllModals();
+            document.getElementById('modal-result-screen').classList.remove('hidden');
+            updatePhaseBadge("Fase 9: Evaluación y Rúbrica Final");
+
+            if(recapped) {
+                scoreData.criticalFail = true;
+                scoreData.failReason = "Has intentado reencapuchar la aguja usada, sufriendo un accidente por punción biológica.";
+            }
+
+            calculateAndDisplayScore();
+        }
+
+        function calculateAndDisplayScore() {
+            const iconEl = document.getElementById('result-icon');
+            const titleEl = document.getElementById('result-title');
+            const scoreEl = document.getElementById('result-score');
+            const breakdownEl = document.getElementById('rubric-breakdown');
+            const feedbackEl = document.getElementById('result-feedback');
+
+            if(scoreData.criticalFail) {
+                iconEl.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto border border-red-500 bg-red-500/20 text-red-400";
+                iconEl.innerHTML = `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                titleEl.innerText = "Simulación Reprobada";
+                titleEl.className = "text-2xl font-bold text-red-400";
+                scoreEl.innerText = "0.0 / 5.0";
+                
+                breakdownEl.innerHTML = `
+                    <div class="p-3 bg-red-900/30 border border-red-500/30 rounded-xl text-red-200">
+                        <strong>FALLO CRÍTICO DE BIOSEGURIDAD:</strong> ${scoreData.failReason}
+                    </div>
+                `;
+
+                feedbackEl.innerText = "En la práctica clínica real, esta acción es la principal causa de transmisión de patógenos por vía hemática (HBV, HCV, VIH). Las agujas usadas NUNCA se reencapuchan; deben depositarse de inmediato en el contenedor rígido de cortopunzantes (guardián).";
+                return;
+            }
+
+            // Cálculo Nota Ponderada
+            let total = Math.max(0, scoreData.safety + scoreData.asepsis + scoreData.anatomy + scoreData.technique + scoreData.waste);
+            total = Math.min(5.0, total).toFixed(1);
+
+            if(total >= 4.0) {
+                iconEl.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto border border-emerald-500 bg-emerald-500/20 text-emerald-400";
+                iconEl.innerHTML = `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
+                titleEl.innerText = "¡Excelente Desempeño!";
+                titleEl.className = "text-2xl font-bold text-emerald-400";
+            } else {
+                iconEl.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto border border-amber-500 bg-amber-500/20 text-amber-400";
+                iconEl.innerHTML = `<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`;
+                titleEl.innerText = "Aprobado con Observaciones";
+                titleEl.className = "text-2xl font-bold text-amber-400";
+            }
+
+            scoreEl.innerText = `${total} / 5.0`;
+
+            breakdownEl.innerHTML = `
+                <div class="flex justify-between"><span>Seguridad del Paciente:</span> <strong class="text-slate-200">${scoreData.safety.toFixed(1)} / 1.0</strong></div>
+                <div class="flex justify-between"><span>Técnica Aséptica:</span> <strong class="text-slate-200">${scoreData.asepsis.toFixed(1)} / 1.0</strong></div>
+                <div class="flex justify-between"><span>Precisión Anatómica:</span> <strong class="text-slate-200">${scoreData.anatomy.toFixed(1)} / 1.0</strong></div>
+                <div class="flex justify-between"><span>Habilidad Procedimental:</span> <strong class="text-slate-200">${scoreData.technique.toFixed(1)} / 1.0</strong></div>
+                <div class="flex justify-between"><span>Gestión de Residuos:</span> <strong class="text-slate-200">${scoreData.waste.toFixed(1)} / 1.0</strong></div>
+            `;
+
+            feedbackEl.innerText = total >= 4.0 
+                ? "Has demostrado un sólido juicio clínico, respetando la técnica de asepsia, delimitación anatómica e inyección intramuscular segura."
+                : "Has completado la simulación, pero cometiste imprecisiones en la selección de insumos, ángulo o secuencia. Revisa los puntos penalizados para reforzar la técnica.";
+        }
+
+        function resetGame() {
+            scoreData = { safety: 1.0, asepsis: 1.0, anatomy: 1.0, technique: 1.0, waste: 1.0, criticalFail: false, failReason: "" };
+            selectedStepIds = [];
+            orderedStepIds = [];
+            selectedSupplyIds = [];
+            asepsisProgress = 0;
+            nextStep(1);
+            document.getElementById('modal-welcome').classList.remove('hidden');
+            gsapCameraPosition(0, 2.5, 5);
+        }
+
+        // Inicializar al cargar
+        window.onload = () => {
+            init3D();
+        };
+    </script>
+</body>
+</html>
